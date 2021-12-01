@@ -91,9 +91,9 @@ def get_bitcoin_price():
     price = parsed_data["price"]
     return price;
 
-def query_twitter(consumer_key, consumer_secret, access_token, access_token_secret):
-    auth = tweepy.OAuthHandler(consumer_key, consumer_secret)
-    auth.set_access_token(access_token, access_token_secret)
+def query_twitter(tweepy):
+    #auth = tweepy.OAuthHandler(consumer_key, consumer_secret)
+    #auth.set_access_token(access_token, access_token_secret)
     twitter_api = tweepy.API(auth)
 
     query_string = "$BTC" + " -filter:retweets"
@@ -105,9 +105,26 @@ def query_twitter(consumer_key, consumer_secret, access_token, access_token_secr
     return tweets.count, total_score
 
 
-def start_task():
-    price = get_bitcoin_price()
+def fetch_and_persist_data(tweepy):
+    price = get_bitcoin_price()   
 
+    # Configure tweepy
+    count, total_score = query_twitter(tweepy)
+   
+    score = (datetime.utcnow(), price, count, total_score)
+    save_score(score)
+
+
+def task_loop(s, now, tweepy):    
+    fetch_and_persist_data(tweepy)
+    # do your stuff
+    passed = (datetime.now() - now)
+    delta = timedelta(hours=2)
+    if passed < delta:
+        s.enter(2, 1, task_loop, (s, now, tweepy))
+
+if __name__ == "__main__":
+    print("Welcome to crypto twitter sentiment tracker")
     config = configparser.ConfigParser()
     config.sections()
     config.read('config.ini')
@@ -118,25 +135,12 @@ def start_task():
     access_token = config['DEFAULT']['access_token']
     access_token_secret = config['DEFAULT']['access_token_secret']
 
-    # Configure tweepy
-    count, total_score = query_twitter(consumer_key, consumer_secret, access_token, access_token_secret)
-   
-    score = (datetime.utcnow(), price, count, total_score);
-    save_score(score);
+    auth = tweepy.OAuthHandler(consumer_key, consumer_secret)
+    auth.set_access_token(access_token, access_token_secret)
 
 
-def do_something(s, now): 
-    start_task()
-    # do your stuff
-    passed = (datetime.now() - now)
-    delta = timedelta(hours=2)
-    if passed < delta:
-        s.enter(2, 1, do_something, (s, now))
-
-if __name__ == "__main__":
-    print("Welcome to crypto twitter sentiment tracker")
     now = datetime.now()
     s = sched.scheduler(time.time, time.sleep)
-    s.enter(2, 1, do_something, (s, now))
+    s.enter(2, 1, task_loop, (s, now, tweepy))
     s.run()
    
