@@ -1,5 +1,4 @@
-
-
+import sched, time
 import json
 from urllib.request import urlopen
 import tweepy # using version 4.1.0
@@ -7,7 +6,11 @@ import configparser
 import sqlite3
 from sqlite3 import Error
 from datetime import datetime
+from datetime import timedelta
 import os
+
+
+s = sched.scheduler(time.time, time.sleep)
 
 def create_connection(db_file):
     """ create a database connection to the SQLite database
@@ -82,14 +85,28 @@ def get_jsonparsed_data(url):
     data = response.read().decode("utf-8")
     return json.loads(data)
 
-
-if __name__ == "__main__":
-    print("Welcome to crypto twitter sentiment tracker")
+def get_bitcoin_price():
     url = "https://financialmodelingprep.com/api/v3/quote/BTCUSD?apikey=9c33655ac70d040280297ef04cf3ceff"
     parsed_data = get_jsonparsed_data(url)[0]
     price = parsed_data["price"]
-    print("bitcoin price: " + str(price))
+    return price;
 
+def query_twitter(consumer_key, consumer_secret, access_token, access_token_secret):
+    auth = tweepy.OAuthHandler(consumer_key, consumer_secret)
+    auth.set_access_token(access_token, access_token_secret)
+    twitter_api = tweepy.API(auth)
+
+    query_string = "$BTC" + " -filter:retweets"
+    tweets = twitter_api.search_tweets(q=query_string, result_type="recent", count=100, tweet_mode='extended')
+    total_score = 0;
+    for tweet in tweets:
+        sentiment_score = tweet.favorite_count + 2 * tweet.retweet_count
+        total_score += sentiment_score;
+    return tweets.count, total_score
+
+
+def start_task():
+    price = get_bitcoin_price()
 
     config = configparser.ConfigParser()
     config.sections()
@@ -102,16 +119,24 @@ if __name__ == "__main__":
     access_token_secret = config['DEFAULT']['access_token_secret']
 
     # Configure tweepy
-    auth = tweepy.OAuthHandler(consumer_key, consumer_secret)
-    auth.set_access_token(access_token, access_token_secret)
-    twitter_api = tweepy.API(auth)
-
-    query_string = "$BTC" + " -filter:retweets"
-    tweets = twitter_api.search_tweets(q=query_string, result_type="recent", count=100, tweet_mode='extended')
-    total_score = 0;
-    for tweet in tweets:
-        sentiment_score = tweet.favorite_count + 2 * tweet.retweet_count
-        total_score += sentiment_score;
-    score = (datetime.utcnow(), price, tweets.count, total_score);
+    count, total_score = query_twitter(consumer_key, consumer_secret, access_token, access_token_secret)
+   
+    score = (datetime.utcnow(), price, count, total_score);
     save_score(score);
-    print(tweets[0])
+
+
+def do_something(s, now): 
+    start_task()
+    # do your stuff
+    passed = (datetime.now() - now)
+    delta = timedelta(hours=2)
+    if passed < delta:
+        s.enter(2, 1, do_something, (s, now))
+
+if __name__ == "__main__":
+    print("Welcome to crypto twitter sentiment tracker")
+    now = datetime.now()
+    s = sched.scheduler(time.time, time.sleep)
+    s.enter(2, 1, do_something, (s, now))
+    s.run()
+   

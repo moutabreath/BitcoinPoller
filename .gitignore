@@ -1,1 +1,3 @@
 .vs/BitcoinPoller/v17/.suo
+BitcoinPoller/config.ini
+BitcoinPoller/pythonsqlite.db
