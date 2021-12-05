@@ -141,3 +141,6 @@ if __name__ == "__main__":
     s.enter(2, 1, task_loop, (s, now, tweepy))
     s.run()
    
+    # What other info can I save so  I could use later?
+    #1. Tweet author - if a tweet author is someone known or famous, it might alter these statistics
+    #2. Twwet Geo - maybe bitcoin is more popular on certain countries more than others?
