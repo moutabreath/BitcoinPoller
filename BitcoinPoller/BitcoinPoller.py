@@ -5,8 +5,7 @@ import tweepy # using version 4.1.0
 import configparser
 import sqlite3
 from sqlite3 import Error
-from datetime import datetime
-from datetime import timedelta
+from datetime import timedelta, timezone , datetime
 import os
 
 
@@ -72,7 +71,7 @@ def init_db():
 def save_score(score):
     conn = init_db();
     with conn:
-        sql = ''' INSERT INTO projects(twwet_datetime,bitcoin_price,num_of_twwets, batch_sentiment_score)
+        sql = ''' INSERT INTO projects(twwet_datetime,bitcoin_price,num_of_tweets, batch_sentiment_score)
                     VALUES(?,?,?,?) '''
         cur = conn.cursor()
         cur.execute(sql, score)
@@ -92,23 +91,22 @@ def get_bitcoin_price():
     return price;
 
 def query_twitter(tweepy):
-    #auth = tweepy.OAuthHandler(consumer_key, consumer_secret)
-    #auth.set_access_token(access_token, access_token_secret)
     twitter_api = tweepy.API(auth)
 
-    query_string = "$BTC" + " -filter:retweets"
+    query_string = "$BTC bitcoin" + " -filter:retweets"
     tweets = twitter_api.search_tweets(q=query_string, result_type="recent", count=100, tweet_mode='extended')
     total_score = 0;
     for tweet in tweets:
-        sentiment_score = tweet.favorite_count + 2 * tweet.retweet_count
-        total_score += sentiment_score;
+        now =  datetime.now(timezone.utc)
+        if now - tweet.created_at <=  timedelta(minutes=1):
+            sentiment_score = tweet.favorite_count + 2 * tweet.retweet_count
+            total_score += sentiment_score;
     return tweets.count, total_score
 
 
 def fetch_and_persist_data(tweepy):
     price = get_bitcoin_price()   
-
-    # Configure tweepy
+    
     count, total_score = query_twitter(tweepy)
    
     score = (datetime.utcnow(), price, count, total_score)
@@ -117,7 +115,6 @@ def fetch_and_persist_data(tweepy):
 
 def task_loop(s, now, tweepy):    
     fetch_and_persist_data(tweepy)
-    # do your stuff
     passed = (datetime.now() - now)
     delta = timedelta(hours=2)
     if passed < delta:
